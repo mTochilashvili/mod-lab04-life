@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
+using Newtonsoft.Json;
+using System.IO;
 
 namespace cli_life
 {
@@ -29,23 +31,45 @@ namespace cli_life
     {
         public readonly Cell[,] Cells;
         public readonly int CellSize;
-
-        public int Columns { get { return Cells.GetLength(0); } }
-        public int Rows { get { return Cells.GetLength(1); } }
-        public int Width { get { return Columns * CellSize; } }
-        public int Height { get { return Rows * CellSize; } }
-
-        public Board(int width, int height, int cellSize, double liveDensity = .1)
+        public int Height
         {
-            CellSize = cellSize;
+            get
+            {
+                return Rows * CellSize;
+            }
+        }
+        public int Width
+        {
+            get
+            {
+                return Columns * CellSize;
+            }
+        }
+        public int Columns
+        {
+            get
+            {
+                return Cells.GetLength(0);
+            }
+        }
+        public int Rows
+        {
+            get
+            {
+                return Cells.GetLength(1);
+            }
+        }
+        public Board(Configuration configuration)
+        {
+            CellSize = configuration.CellSize;
 
-            Cells = new Cell[width / cellSize, height / cellSize];
+            Cells = new Cell[configuration.Width / configuration.CellSize, configuration.Height / configuration.CellSize];
             for (int x = 0; x < Columns; x++)
                 for (int y = 0; y < Rows; y++)
                     Cells[x, y] = new Cell();
 
             ConnectNeighbors();
-            Randomize(liveDensity);
+            Randomize(configuration.LiveDensity);
         }
 
         readonly Random rand = new Random();
@@ -86,46 +110,155 @@ namespace cli_life
             }
         }
     }
+    public class Configuration
+    {
+        struct Data
+        {
+            public int Height { get; set; }
+            public int Width { get; set; }
+            public int CellSize { get; set; }
+            public double LiveDensity { get; set; }
+        }
+        Data data;
+        public int Height
+        {
+            get
+            {
+                return data.Height;
+            }
+        }
+        public int Width
+        {
+            get
+            {
+                return data.Width;
+            }
+        }
+
+        public int CellSize
+        {
+            get
+            {
+                return data.CellSize;
+            }
+        }
+        public double LiveDensity
+        {
+            get
+            {
+                return data.LiveDensity;
+            }
+        }
+        public void LoadConfig(String path)
+        {
+            data = JsonConvert.DeserializeObject<Data>(File.ReadAllText(path));
+        }
+        public void LoadState(Board board, String path)
+        {
+            String buf = File.ReadAllText(path);
+            int i = 0;
+            int j = -1;
+            foreach (char c in buf)
+            {
+                j += 1;
+                if ((j == 50) && (i == 19)) 
+                {
+                    break;
+                }
+                if (c == '1')
+                {
+                    board.Cells[j, i].IsAlive = true;
+                }
+                if (c == '0')
+                {
+                    board.Cells[j, i].IsAlive = false;
+                }
+                if (c == '\n')
+                {
+                    i += 1;
+                    j = -1;
+                }
+               
+            }
+        }
+        public void SaveState(Board board, String path)
+        {
+            String buf = "";
+            for (int row = 0; row < board.Rows; row++)
+            {
+                for (int col = 0; col < board.Columns; col++)
+                {
+                    var cell = board.Cells[col, row];
+                    if (cell.IsAlive)
+                    {
+                        buf += "1";
+                    }
+                    else
+                    {
+                        buf += "0";
+                    }
+                }
+                buf += "\n";
+            }
+            File.WriteAllText(path, buf);
+        }
+        public int GetAliveCells(Board board)
+        {
+            int count = 0;
+            for (int row = 0; row < board.Rows; row++)
+            {
+                for (int col = 0; col < board.Columns; col++)
+                {
+                    if (board.Cells[col, row].IsAlive) count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
     class Program
     {
         static Board board;
-        static private void Reset()
+        static private void Reset(Configuration configuration)
         {
-            board = new Board(
-                width: 50,
-                height: 20,
-                cellSize: 1,
-                liveDensity: 0.5);
+            board = new Board(configuration);
         }
         static void Render()
         {
             for (int row = 0; row < board.Rows; row++)
             {
-                for (int col = 0; col < board.Columns; col++)   
+                for (int col = 0; col < board.Columns; col++)
                 {
                     var cell = board.Cells[col, row];
                     if (cell.IsAlive)
                     {
-                        Console.Write('*');
+                        Console.Write('1');
                     }
                     else
                     {
-                        Console.Write(' ');
+                        Console.Write('0');
                     }
                 }
                 Console.Write('\n');
             }
         }
+
         static void Main(string[] args)
         {
-            Reset();
-            while(true)
+            Configuration configuration = new Configuration();
+            configuration.LoadConfig("C:\\Users\\Makskyreer\\Desktop\\mod-lab04-life-b34\\Configuration.json");
+            Reset(configuration);
+            configuration.LoadState(board, "C:\\Users\\Makskyreer\\Desktop\\mod-lab04-life-b34\\board.txt");
+            while (true)
             {
                 Console.Clear();
                 Render();
+                configuration.SaveState(board, "C:\\Users\\Makskyreer\\Desktop\\mod-lab04-life-b34\\board.txt");
                 board.Advance();
                 Thread.Sleep(1000);
             }
+
         }
     }
 }
